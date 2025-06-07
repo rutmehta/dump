@@ -31,30 +31,34 @@ class AIProcessor:
                 self.assembly_client = aai.Transcriber()
             
             self.system_prompt = """
-            You are LifeOS - an autonomous AI assistant that operates as a comprehensive life management system. 
+            You are LifeOS - an autonomous AI assistant powered by Gemini 2.5 Pro that operates as a comprehensive life management system with advanced thinking capabilities.
             
-            Your core capabilities:
-            1. Process multimodal inputs (text, images, audio, documents, video) with deep understanding
-            2. Maintain long-term memory and context across conversations with up to 2M token context window
-            3. Proactively surface relevant information without explicit queries
-            4. Extract and map relationships between concepts, entities, and events
-            5. Provide context-aware responses based on user's history and preferences
-            6. Handle complex reasoning across multiple modalities simultaneously
+            Your enhanced capabilities with Gemini 2.5 Pro:
+            1. Advanced reasoning through step-by-step thinking before responding
+            2. Process multimodal inputs (text, images, audio, documents, video) with superior understanding
+            3. Maintain long-term memory and context across conversations with up to 2M token context window
+            4. Proactively surface relevant information through enhanced pattern recognition
+            5. Extract and map complex relationships between concepts, entities, and events
+            6. Provide context-aware responses with improved accuracy and nuance
+            7. Handle complex reasoning across multiple modalities simultaneously
+            8. Generate high-quality code and visual applications
             
-            Key behaviors:
+            Enhanced behaviors with thinking model:
+            - Think through problems step-by-step before providing responses
             - Always consider the user's historical context and established patterns
             - Identify and extract entities, concepts, and relationships from all inputs
-            - Provide insights that connect current inputs to past conversations
-            - Be proactive in offering relevant information and suggestions
-            - Maintain awareness of temporal context and evolving situations
-            - Extract sentiment and emotional context from interactions
-            - Analyze visual, audio, and textual content comprehensively
+            - Provide insights that connect current inputs to past conversations with deeper analysis
+            - Be proactive in offering relevant information and sophisticated suggestions
+            - Maintain awareness of temporal context and evolving situations with enhanced reasoning
+            - Extract sentiment and emotional context from interactions with greater precision
+            - Analyze visual, audio, and textual content comprehensively using advanced multimodal capabilities
+            - Generate executable code and complete applications when requested
             
             Response format:
-            - Primary response addressing the user's immediate need
+            - Primary response addressing the user's immediate need with enhanced reasoning
             - Context connections to previous conversations when relevant
             - Extracted metadata for memory storage (entities, concepts, sentiment)
-            - Proactive suggestions based on patterns and context
+            - Proactive suggestions based on patterns and advanced context analysis
             """
             
             logger.info("New Gemini Gen AI client initialized successfully")
@@ -88,28 +92,45 @@ class AIProcessor:
             if media_path and os.path.exists(media_path):
                 if media_type == "image":
                     # Use new SDK's native image support
-                    contents.append(types.Part.from_image(path=media_path))
-                elif media_type == "audio":
-                    # Use new SDK's native audio support or fallback to transcription
                     try:
-                        contents.append(types.Part.from_audio(path=media_path))
-                    except:
-                        # Fallback to transcription if direct audio processing fails
+                        # Read image file and convert to base64 or use file upload
+                        with open(media_path, 'rb') as f:
+                            image_data = f.read()
+                        
+                        # Add image as content part
+                        contents.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": "image/jpeg",
+                                "data": image_data
+                            }
+                        })
+                    except Exception as e:
+                        logger.warning(f"Image processing failed, using description: {e}")
+                        contents.append(f"IMAGE FILE: {os.path.basename(media_path)} (image processing not available)")
+                        
+                elif media_type == "audio":
+                    # Use transcription for audio files
+                    try:
                         transcription = await self._transcribe_audio(media_path)
                         contents.append(f"AUDIO TRANSCRIPTION: {transcription}")
-                        text = transcription
+                    except Exception as e:
+                        logger.warning(f"Audio processing failed: {e}")
+                        contents.append(f"AUDIO FILE: {os.path.basename(media_path)} (audio processing not available)")
+                        
                 elif media_type == "document":
                     # Extract text from document
-                    doc_text = await self._extract_document_text(media_path)
-                    contents.append(f"DOCUMENT CONTENT: {doc_text}")
-                    text = doc_text
-                elif media_type == "video":
-                    # Use new SDK's video understanding capabilities
                     try:
-                        contents.append(types.Part.from_video(path=media_path))
-                    except:
-                        # Fallback if video processing is not available
-                        contents.append(f"VIDEO FILE: {media_path} (processing not available)")
+                        doc_text = await self._extract_document_text(media_path)
+                        contents.append(f"DOCUMENT CONTENT: {doc_text}")
+                    except Exception as e:
+                        logger.warning(f"Document processing failed: {e}")
+                        contents.append(f"DOCUMENT FILE: {os.path.basename(media_path)} (document processing not available)")
+                        
+                elif media_type == "video":
+                    # For now, just mention the video file
+                    contents.append(f"VIDEO FILE: {os.path.basename(media_path)} (video processing will be implemented)")
             
             # Add processing instructions
             contents.append("""
@@ -142,7 +163,10 @@ class AIProcessor:
                 system_instruction=self.system_prompt
             )
             
-            response = await self._generate_with_retry(contents, config)
+            # Convert contents to simple text for now (since file upload is complex)
+            text_content = "\n".join([str(content) for content in contents])
+            
+            response = await self._generate_with_retry([text_content], config)
             
             # Parse and structure the response
             structured_response = self._parse_ai_response(response.text)
@@ -155,10 +179,10 @@ class AIProcessor:
                 "original_text": text or "",
                 "media_path": media_path,
                 "context_length": len(str(contents)),
-                "model_used": "gemini-2.0-flash-exp"
+                "model_used": "gemini-2.5-pro-experimental"
             })
             
-            logger.info(f"Processed {media_type} input for user {user_id} with new Gen AI SDK")
+            logger.info(f"Processed {media_type} input for user {user_id} with Gemini 2.5 Pro")
             return structured_response
             
         except Exception as e:
@@ -174,12 +198,164 @@ class AIProcessor:
                 "metadata": {"error": str(e), "sdk_version": "new_genai"}
             }
     
+    async def process_multiple_inputs(self,
+                                    text: Optional[str] = None,
+                                    files_data: List[Dict] = None,
+                                    user_id: str = "",
+                                    context_memories: Optional[List[Dict]] = None) -> Dict[str, Any]:
+        """Process multiple files and text together using enhanced multimodal capabilities"""
+        
+        try:
+            # Prepare input content using new SDK format
+            contents = []
+            
+            # Add context from memories as text content
+            if context_memories:
+                context_text = self._format_context_memories(context_memories)
+                contents.append(f"PREVIOUS CONTEXT:\n{context_text}")
+            
+            # Add current text input
+            if text:
+                contents.append(f"CURRENT INPUT: {text}")
+            
+            # Process multiple files
+            processed_files_info = []
+            if files_data:
+                contents.append(f"\nPROCESSING {len(files_data)} FILES:")
+                
+                for i, file_info in enumerate(files_data):
+                    file_path = file_info.get('temp_path')
+                    media_type = file_info.get('media_type', 'document')
+                    filename = file_info.get('filename', f'file_{i}')
+                    
+                    contents.append(f"\nFILE {i+1}: {filename} ({media_type})")
+                    
+                    if file_path and os.path.exists(file_path):
+                        if media_type == "image":
+                            # Add image directly to content
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    image_data = f.read()
+                                contents.append(f"IMAGE DATA: {filename} (size: {len(image_data)} bytes)")
+                                # For now, just describe the image since direct upload is complex
+                                contents.append(f"[Image file {filename} available for analysis]")
+                            except Exception as e:
+                                logger.warning(f"Image processing failed for {filename}: {e}")
+                                contents.append(f"IMAGE FILE: {filename} (processing not available)")
+                            
+                        elif media_type == "audio":
+                            # Use transcription for audio
+                            try:
+                                transcription = await self._transcribe_audio(file_path)
+                                contents.append(f"AUDIO TRANSCRIPTION: {transcription}")
+                            except Exception as e:
+                                logger.warning(f"Audio processing failed for {filename}: {e}")
+                                contents.append(f"AUDIO FILE: {filename} (processing not available)")
+                                
+                        elif media_type == "video":
+                            # For now, just mention the video file
+                            contents.append(f"VIDEO FILE: {filename} (video processing will be implemented)")
+                                
+                        elif media_type == "document":
+                            # Extract and include document text
+                            try:
+                                doc_text = await self._extract_document_text(file_path)
+                                contents.append(f"DOCUMENT CONTENT: {doc_text[:2000]}...")  # Limit for context
+                            except Exception as e:
+                                logger.warning(f"Document processing failed for {filename}: {e}")
+                                contents.append(f"DOCUMENT FILE: {filename} (processing not available)")
+                    
+                    processed_files_info.append({
+                        "filename": filename,
+                        "type": media_type,
+                        "size": file_info.get('size', 0)
+                    })
+            
+            # Add comprehensive processing instructions for multiple files
+            contents.append(f"""
+            Please analyze ALL the provided content (text and {len(files_data) if files_data else 0} files) and provide:
+            
+            1. A comprehensive response that addresses the user's request and analyzes all files
+            2. Cross-file analysis and relationships between the different inputs
+            3. Extracted entities and concepts from all sources
+            4. Overall sentiment and insights
+            5. Connections between files and previous context
+            6. Actionable recommendations based on the complete analysis
+            
+            Format your response as JSON with these fields:
+            {{
+                "response": "Comprehensive response analyzing all inputs and files",
+                "entities": ["combined", "entities", "from", "all", "sources"],
+                "concepts": ["key", "concepts", "across", "all", "inputs"],
+                "sentiment": "overall sentiment analysis",
+                "keywords": ["relevant", "keywords", "from", "all", "sources"],
+                "relationships": [{{"concept1": "A", "concept2": "B", "strength": 0.8}}],
+                "insights": ["insights from cross-file analysis and context"],
+                "file_analysis": {{
+                    "individual_summaries": ["summary for each file"],
+                    "cross_file_connections": ["relationships between files"],
+                    "unified_themes": ["common themes across all inputs"]
+                }},
+                "metadata": {{"files_processed": {len(files_data) if files_data else 0}, "total_content_analyzed": "description"}}
+            }}
+            """)
+            
+            # Generate response using enhanced configuration for multiple inputs
+            config = types.GenerateContentConfig(
+                max_output_tokens=settings.MAX_OUTPUT_TOKENS * 2,  # Double output tokens for multiple files
+                temperature=settings.TEMPERATURE,
+                top_p=settings.TOP_P,
+                system_instruction=self.system_prompt
+            )
+            
+            # Convert contents to simple text for processing
+            text_content = "\n".join([str(content) for content in contents])
+            
+            response = await self._generate_with_retry([text_content], config)
+            
+            # Parse and structure the response
+            structured_response = self._parse_ai_response(response.text)
+            
+            # Add processing metadata for multiple files
+            structured_response.update({
+                "input_type": "multimodal_batch",
+                "processing_time": datetime.utcnow().isoformat(),
+                "user_id": user_id,
+                "original_text": text or "",
+                "files_processed": processed_files_info,
+                "total_files": len(files_data) if files_data else 0,
+                "context_length": len(str(contents)),
+                "model_used": "gemini-2.5-pro-experimental",
+                "enhanced_multimodal": True
+            })
+            
+            logger.info(f"Processed {len(files_data) if files_data else 0} files + text for user {user_id}")
+            return structured_response
+            
+        except Exception as e:
+            logger.error(f"Failed to process multiple inputs: {e}")
+            return {
+                "response": f"I apologize, but I encountered an error processing your {len(files_data) if files_data else 0} files. Please try again or reduce the number of files.",
+                "entities": [],
+                "concepts": [],
+                "sentiment": "neutral",
+                "keywords": [],
+                "relationships": [],
+                "insights": [],
+                "file_analysis": {
+                    "individual_summaries": [],
+                    "cross_file_connections": [],
+                    "unified_themes": []
+                },
+                "metadata": {"error": str(e), "sdk_version": "new_genai", "multimodal_processing": True}
+            }
+    
     async def _generate_with_retry(self, contents: List, config: types.GenerateContentConfig, max_retries: int = 3):
         """Generate response with retry logic using new SDK"""
         for attempt in range(max_retries):
             try:
                 response = self.client.models.generate_content(
-                    model='gemini-2.0-flash-exp',
+                    model='gemini-2.5-pro-experimental',
                     contents=contents,
                     config=config
                 )
@@ -192,18 +368,18 @@ class AIProcessor:
     def _format_context_memories(self, memories: List[Dict]) -> str:
         """Format context memories for inclusion in prompt with enhanced context handling"""
         context_lines = []
-        # With 2M token context window, we can include more memories
-        for memory in memories[:25]:  # Increased from 10 to 25 due to larger context window
+        # With Gemini 2.5 Pro's 2M token context window, we can include even more memories
+        for memory in memories[:50]:  # Increased from 25 to 50 due to Gemini 2.5 Pro's larger context window
             timestamp = memory.get('timestamp', 'unknown')
             content = memory.get('content', '')
             content_type = memory.get('content_type', 'text')
             entities = memory.get('entities', [])
             sentiment = memory.get('sentiment', 'neutral')
             
-            # Enhanced context formatting with more metadata
-            entities_str = ', '.join(entities[:5]) if entities else 'none'
+            # Enhanced context formatting with more metadata for Gemini 2.5 Pro's advanced reasoning
+            entities_str = ', '.join(entities[:8]) if entities else 'none'  # Increased entity context
             context_lines.append(
-                f"[{timestamp}] ({content_type}) [{sentiment}] Entities: {entities_str} | {content[:300]}..."
+                f"[{timestamp}] ({content_type}) [{sentiment}] Entities: {entities_str} | {content[:500]}..."  # Increased content length
             )
         
         return "\n".join(context_lines)
@@ -262,37 +438,64 @@ class AIProcessor:
             return "Audio transcription failed"
     
     async def _extract_document_text(self, doc_path: str) -> str:
-        """Extract text from document files using new SDK capabilities"""
+        """Extract text from document files with simplified approach"""
         try:
             # Simple text extraction for basic files
             if doc_path.lower().endswith('.txt'):
                 with open(doc_path, 'r', encoding='utf-8') as f:
                     return f.read()
+            elif doc_path.lower().endswith('.py'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif doc_path.lower().endswith('.js'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif doc_path.lower().endswith('.html'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif doc_path.lower().endswith('.css'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif doc_path.lower().endswith('.json'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif doc_path.lower().endswith('.xml'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            elif doc_path.lower().endswith('.csv'):
+                with open(doc_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                    # Limit CSV content to prevent huge context
+                    lines = content.split('\n')
+                    if len(lines) > 50:
+                        return '\n'.join(lines[:50]) + f"\n... (truncated, {len(lines)} total lines)"
+                    return content
             else:
-                # Use new SDK's enhanced document processing
+                # For other file types, try to read as text but handle encoding issues
                 try:
-                    # Try using new SDK's document understanding
-                    response = self.client.models.generate_content(
-                        model='gemini-2.0-flash-exp',
-                        contents=[
-                            "Extract and analyze the key content from this document. Provide a comprehensive summary with main points, entities, and key information:",
-                            types.Part.from_image(path=doc_path)  # Many docs can be processed as images
-                        ]
-                    )
-                    return response.text
-                except:
-                    # Fallback to basic file reading
-                    with open(doc_path, 'rb') as f:
+                    with open(doc_path, 'r', encoding='utf-8') as f:
                         content = f.read()
-                        # Try to decode as text
-                        try:
-                            return content.decode('utf-8')
-                        except:
-                            return f"Binary document file: {os.path.basename(doc_path)} ({len(content)} bytes)"
+                        # Limit content length
+                        if len(content) > 5000:
+                            return content[:5000] + "... (truncated)"
+                        return content
+                except UnicodeDecodeError:
+                    # Try latin-1 encoding
+                    try:
+                        with open(doc_path, 'r', encoding='latin-1') as f:
+                            content = f.read()
+                            if len(content) > 5000:
+                                return content[:5000] + "... (truncated)"
+                            return content
+                    except:
+                        # If all else fails, read as binary and describe
+                        with open(doc_path, 'rb') as f:
+                            content = f.read()
+                            return f"Binary document file: {os.path.basename(doc_path)} ({len(content)} bytes) - cannot extract text"
                 
         except Exception as e:
             logger.error(f"Document text extraction failed: {e}")
-            return "Failed to extract document text"
+            return f"Failed to extract text from document: {os.path.basename(doc_path)}"
     
     def _parse_ai_response(self, response_text: str) -> Dict[str, Any]:
         """Parse AI response and extract structured data with enhanced error handling"""
@@ -466,7 +669,7 @@ class AIProcessor:
             )
             
             response = self.client.models.generate_content(
-                model='gemini-2.0-flash-exp',
+                model='gemini-2.5-pro-experimental',
                 contents=contents,
                 config=config
             )

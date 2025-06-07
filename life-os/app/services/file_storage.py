@@ -13,6 +13,51 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
+class FileStorage:
+    def __init__(self):
+        self.storage_path = Path(settings.MEDIA_STORAGE_PATH)
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        logger.info(f"File storage initialized at: {self.storage_path}")
+    
+    async def save_file(self, file_content: bytes, filename: str, content_type: str = "") -> str:
+        """Save file content and return the file path"""
+        try:
+            # Generate unique filename
+            file_id = str(uuid.uuid4())
+            extension = Path(filename).suffix
+            safe_filename = f"{file_id}{extension}"
+            file_path = self.storage_path / safe_filename
+            
+            # Save file
+            async with aiofiles.open(file_path, 'wb') as f:
+                await f.write(file_content)
+            
+            logger.info(f"File saved: {safe_filename}")
+            return str(file_path)
+            
+        except Exception as e:
+            logger.error(f"Failed to save file {filename}: {e}")
+            raise
+    
+    def get_file_path(self, filename: str) -> Optional[str]:
+        """Get full path to stored file"""
+        file_path = self.storage_path / filename
+        if file_path.exists():
+            return str(file_path)
+        return None
+    
+    def delete_file(self, file_path: str) -> bool:
+        """Delete a file"""
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.info(f"File deleted: {file_path}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to delete file {file_path}: {e}")
+            return False
+
 class FileStorageService:
     def __init__(self):
         self.storage_path = Path(settings.MEDIA_STORAGE_PATH)

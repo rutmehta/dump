@@ -7,17 +7,42 @@ from datetime import datetime
 
 from ..services.ai_processor import AIProcessor
 from ..services.memory_manager import MemoryManager
-from ..services.file_storage import FileStorageService
+from ..services.file_storage import FileStorage
 from ..config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Initialize services
-ai_processor = AIProcessor()
-memory_manager = MemoryManager()
-file_storage = FileStorageService()
+# Initialize services with graceful error handling
+try:
+    ai_processor = AIProcessor()
+    logger.info("✅ AI Processor initialized")
+except Exception as e:
+    logger.warning(f"⚠️  AI Processor initialization failed: {e}")
+    ai_processor = None
+
+try:
+    memory_manager = MemoryManager()
+    logger.info("✅ Memory Manager initialized")
+except Exception as e:
+    logger.warning(f"⚠️  Memory Manager initialization failed: {e}")
+    memory_manager = None
+
+try:
+    file_storage = FileStorage()
+    logger.info("✅ File Storage initialized")
+except Exception as e:
+    logger.warning(f"⚠️  File Storage initialization failed: {e}")
+    file_storage = None
+
+# Log overall initialization status
+if ai_processor and memory_manager and file_storage:
+    logger.info("🚀 All WhatsApp services initialized successfully")
+elif ai_processor:
+    logger.info("🎭 WhatsApp services running in DEMO MODE - limited functionality available")
+else:
+    logger.warning("⚠️  WhatsApp services have limited functionality - check configuration")
 
 @router.post("/whatsapp")
 async def handle_whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):

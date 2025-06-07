@@ -13,8 +13,9 @@ class Neo4jClient:
         self._initialize_driver()
     
     def _initialize_driver(self):
-        """Initialize Neo4j driver with authentication"""
+        """Initialize Neo4j driver with graceful fallback"""
         try:
+            logger.info("Attempting to connect to Neo4j...")
             self.driver = GraphDatabase.driver(
                 settings.NEO4J_URI,
                 auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
@@ -24,12 +25,13 @@ class Neo4jClient:
             with self.driver.session() as session:
                 session.run("RETURN 1")
             
-            logger.info("Neo4j driver initialized successfully")
+            logger.info("✅ Neo4j driver initialized successfully")
             self._create_constraints()
             
         except Exception as e:
-            logger.error(f"Failed to initialize Neo4j driver: {e}")
-            raise
+            logger.warning(f"⚠️  Failed to initialize Neo4j driver: {e}")
+            logger.info("📝 Demo mode: Knowledge graph features will be simulated")
+            self.driver = None
     
     def _create_constraints(self):
         """Create constraints and indexes for better performance"""

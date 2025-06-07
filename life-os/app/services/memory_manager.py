@@ -19,6 +19,13 @@ class MemoryManager:
         self.cache = LRUCache(maxsize=settings.LRU_CACHE_SIZE)
         self.redis_client = None
         self._initialize_redis()
+        
+        # Check database availability for demo mode info
+        self.demo_mode = not (self.vector_db.client and self.knowledge_graph.driver)
+        if self.demo_mode:
+            logger.info("🎭 Memory Manager running in DEMO MODE - databases not connected")
+        else:
+            logger.info("🗄️  Memory Manager running with full database support")
     
     def _initialize_redis(self):
         """Initialize Redis client for session management"""

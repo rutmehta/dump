@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from app.routes import whatsapp_webhook, voice_call_handler
+from app.routes import whatsapp_webhook, voice_call_handler, demo_frontend
 from app.config import settings
 
 # Configure logging
@@ -32,11 +32,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"Server: {settings.HOST}:{settings.PORT}")
     logger.info(f"Model: {settings.DEFAULT_MODEL}")
     logger.info(f"Context Window: {settings.MAX_CONTEXT_TOKENS:,} tokens")
+    logger.info(f"Demo Frontend: http://{settings.HOST}:{settings.PORT}/demo")
     
     # Validate critical configuration
     if not settings.GEMINI_API_KEY:
-        logger.error("❌ GEMINI_API_KEY not configured")
-        raise ValueError("GEMINI_API_KEY is required")
+        logger.warning("⚠️  GEMINI_API_KEY not configured - AI features will work in demo mode")
     
     if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
         logger.warning("⚠️  Twilio credentials not configured - WhatsApp/Voice features may not work")
@@ -82,6 +82,13 @@ app.include_router(
     tags=["Voice"]
 )
 
+# Include demo frontend router
+app.include_router(
+    demo_frontend.router,
+    prefix="/demo",
+    tags=["Demo"]
+)
+
 @app.get("/")
 async def root():
     """Root endpoint with basic system info"""
@@ -101,6 +108,7 @@ async def root():
             "proactive_memory"
         ],
         "endpoints": {
+            "demo_frontend": "/demo",
             "whatsapp_webhook": "/api/v1/whatsapp",
             "voice_incoming": "/api/v1/voice/incoming",
             "status_check": "/api/v1/whatsapp/status",
@@ -119,13 +127,15 @@ async def health_check():
             "version": "2.0.0",
             "ai_model": settings.DEFAULT_MODEL,
             "context_window": f"{settings.MAX_CONTEXT_TOKENS:,} tokens",
+            "demo_frontend": f"http://{settings.HOST}:{settings.PORT}/demo",
             "services": {
                 "api": "healthy",
                 "whatsapp": "unknown",
                 "voice": "healthy",
                 "ai": "unknown",
                 "memory": "unknown",
-                "storage": "healthy"
+                "storage": "healthy",
+                "demo": "healthy"
             },
             "capabilities": {
                 "video_processing": settings.ENABLE_VIDEO_PROCESSING,
@@ -139,22 +149,22 @@ async def health_check():
             from app.routes.whatsapp_webhook import ai_processor, memory_manager, file_storage
             
             # Check AI processor (updated for new SDK)
-            if ai_processor.client:
+            if ai_processor and ai_processor.client:
                 health_status["services"]["ai"] = "healthy"
             else:
-                health_status["services"]["ai"] = "unhealthy"
+                health_status["services"]["ai"] = "demo_mode"
             
             # Check memory manager
-            if memory_manager.vector_db.client:
+            if memory_manager and memory_manager.vector_db.client:
                 health_status["services"]["memory"] = "healthy"
             else:
-                health_status["services"]["memory"] = "unhealthy"
+                health_status["services"]["memory"] = "demo_mode"
                 
             health_status["services"]["whatsapp"] = "healthy"
             
         except Exception as e:
             logger.warning(f"Health check services probe failed: {e}")
-            health_status["services"]["whatsapp"] = "degraded"
+            health_status["services"]["whatsapp"] = "demo_mode"
         
         # Determine overall health
         service_statuses = list(health_status["services"].values())

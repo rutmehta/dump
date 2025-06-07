@@ -15,25 +15,24 @@ class WeaviateClient:
         self._initialize_client()
     
     def _initialize_client(self):
-        """Initialize Weaviate client with authentication"""
+        """Initialize Weaviate client with graceful fallback"""
         try:
-            auth_config = None
-            if settings.WEAVIATE_API_KEY:
-                auth_config = weaviate.auth.AuthApiKey(api_key=settings.WEAVIATE_API_KEY)
-            
+            logger.info("Attempting to connect to Weaviate...")
             self.client = weaviate.Client(
                 url=settings.WEAVIATE_URL,
-                auth_client_secret=auth_config,
-                timeout_config=(5, 15)
+                additional_headers={
+                    "X-OpenAI-Api-Key": settings.GEMINI_API_KEY if settings.GEMINI_API_KEY else ""
+                } if settings.WEAVIATE_API_KEY else {}
             )
             
-            # Check if schema exists, create if not
-            self._setup_schema()
-            logger.info("Weaviate client initialized successfully")
+            # Test connection
+            self.client.schema.get()
+            logger.info("✅ Weaviate client initialized successfully")
             
         except Exception as e:
-            logger.error(f"Failed to initialize Weaviate client: {e}")
-            raise
+            logger.warning(f"⚠️  Failed to initialize Weaviate client: {e}")
+            logger.info("📝 Demo mode: Vector database features will be simulated")
+            self.client = None
     
     def _setup_schema(self):
         """Set up the schema for multimodal memory storage"""
