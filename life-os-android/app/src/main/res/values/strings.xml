@@ -1,0 +1,32 @@
+<resources>
+    <string name="app_name">Life OS</string>
+    
+    <!-- Navigation -->
+    <string name="nav_capture">Capture</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_insights">Insights</string>
+    <string name="nav_settings">Settings</string>
+    
+    <!-- Capture Screen -->
+    <string name="capture_hint">What\'s on your mind?</string>
+    <string name="capture_text">Text</string>
+    <string name="capture_voice">Voice</string>
+    <string name="capture_camera">Camera</string>
+    <string name="capture_document">Document</string>
+    <string name="capture_success">Captured successfully!</string>
+    
+    <!-- Search Screen -->
+    <string name="search_hint">Search your memories</string>
+    <string name="search_semantic">Semantic</string>
+    <string name="search_keyword">Keyword</string>
+    <string name="search_hybrid">Hybrid</string>
+    <string name="search_no_results">No memories found</string>
+    
+    <!-- Common -->
+    <string name="error_generic">Something went wrong</string>
+    <string name="loading">Loading…</string>
+    <string name="retry">Retry</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+</resources>
